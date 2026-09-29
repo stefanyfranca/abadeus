@@ -1,0 +1,130 @@
+[
+  {
+    "id": 1,
+    "name": "Sala de Reunião Alfa",
+    "type": "MEETING_ROOM",
+    "capacity": 8,
+    "description": "Sala com TV 55 polegadas, mesa oval e ar-condicionado.",
+    "is_active": true
+  },
+  {
+    "id": 2,
+    "name": "Sala de Reunião Beta",
+    "type": "MEETING_ROOM",
+    "capacity": 12,
+    "description": "Sala com projetor, quadro branco e sistema de videoconferência.",
+    "is_active": true
+  },
+  {
+    "id": 3,
+    "name": "Sala de Reunião Gama",
+    "type": "MEETING_ROOM",
+    "capacity": 6,
+    "description": "Sala pequena e reservada, ideal para reuniões rápidas.",
+    "is_active": true
+  },
+  {
+    "id": 4,
+    "name": "Sala de Reunião Executiva",
+    "type": "MEETING_ROOM",
+    "capacity": 20,
+    "description": "Sala ampla com mesa de conferência, telão e sistema de som.",
+    "is_active": true
+  },
+  {
+    "id": 5,
+    "name": "Sala de Reunião Delta",
+    "type": "MEETING_ROOM",
+    "capacity": 10,
+    "description": "Sala em manutenção do projetor, temporariamente indisponível.",
+    "is_active": false
+  },
+  {
+    "id": 6,
+    "name": "Coworking Área Aberta",
+    "type": "COWORKING",
+    "capacity": 30,
+    "description": "Espaço aberto com estações de trabalho compartilhadas e Wi-Fi de alta velocidade.",
+    "is_active": true
+  },
+  {
+    "id": 7,
+    "name": "Coworking Silencioso",
+    "type": "COWORKING",
+    "capacity": 15,
+    "description": "Área de foco com baias individuais e regras de silêncio.",
+    "is_active": true
+  },
+  {
+    "id": 8,
+    "name": "Coworking Colaborativo",
+    "type": "COWORKING",
+    "capacity": 20,
+    "description": "Mesas coletivas, sofás e lousas para trabalho em equipe.",
+    "is_active": true
+  },
+  {
+    "id": 9,
+    "name": "Coworking Mezanino",
+    "type": "COWORKING",
+    "capacity": 12,
+    "description": "Mezanino com vista para o pátio e tomadas em todas as mesas.",
+    "is_active": true
+  },
+  {
+    "id": 10,
+    "name": "Laboratório de Informática 1",
+    "type": "LAB",
+    "capacity": 30,
+    "description": "30 computadores com Windows e Linux, projetor e ar-condicionado.",
+    "is_active": true
+  },
+  {
+    "id": 11,
+    "name": "Laboratório de Informática 2",
+    "type": "LAB",
+    "capacity": 25,
+    "description": "Laboratório voltado ao desenvolvimento de software, com monitores duplos.",
+    "is_active": true
+  },
+  {
+    "id": 12,
+    "name": "Laboratório de Redes",
+    "type": "LAB",
+    "capacity": 20,
+    "description": "Equipado com switches, roteadores e racks para práticas de infraestrutura.",
+    "is_active": true
+  },
+  {
+    "id": 13,
+    "name": "Laboratório de Robótica",
+    "type": "LAB",
+    "capacity": 18,
+    "description": "Bancadas com kits Arduino, Raspberry Pi e impressora 3D.",
+    "is_active": true
+  },
+  {
+    "id": 14,
+    "name": "Laboratório de IoT",
+    "type": "LAB",
+    "capacity": 16,
+    "description": "Espaço para prototipagem de dispositivos conectados e sensores.",
+    "is_active": true
+  },
+  {
+    "id": 15,
+    "name": "Laboratório de Realidade Virtual",
+    "type": "LAB",
+    "capacity": 10,
+    "description": "Laboratório com óculos VR e computadores de alto desempenho.",
+    "is_active": false
+  },
+  {
+    "id": 16,
+    "name": "Sala de Reunião Omega",
+    "type": "MEETING_ROOM",
+    "capacity": 4,
+    "description": "Sala compacta para entrevistas e atendimentos individuais.",
+    "is_active": true
+  }
+]
