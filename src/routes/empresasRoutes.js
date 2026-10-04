@@ -1,19 +1,16 @@
-const express = require("express");
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
-const dbPath = path.join(__dirname, "..", "db", "empresas.json");
+const DB_PATH = path.join(__dirname, '..', 'db', 'empresas.json');
 
-function loadEmpresas() {
-  const data = fs.readFileSync(dbPath, "utf-8");
-  return JSON.parse(data);
-}
-
-function saveEmpresas(empresas) {
-  fs.writeFileSync(dbPath, JSON.stringify(empresas, null, 2), "utf-8");
-}
+const ler = () => JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+const salvar = (dados) => fs.writeFileSync(DB_PATH, JSON.stringify(dados, null, 2));
+const normalizar = (t) =>
+  String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const soDigitos = (t) => String(t).replace(/\D/g, '');
+const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * @swagger
@@ -21,45 +18,24 @@ function saveEmpresas(empresas) {
  *   schemas:
  *     Empresa:
  *       type: object
- *       required:
- *         - corporate_name
- *         - cnpj
  *       properties:
- *         id:
- *           type: string
- *           description: Gerado automaticamente no cadastro da empresa
- *         corporate_name:
- *           type: string
- *           description: Razão social da empresa
- *         trade_name:
- *           type: string
- *           description: Nome fantasia da empresa
- *         cnpj:
- *           type: string
- *           description: CNPJ da empresa
- *         phone:
- *           type: string
- *           description: Telefone de contato
- *         created_at:
- *           type: string
- *           format: date-time
- *           description: Data de criação do registro
- *       example:
- *         id: c1a2b3c4-0000-4000-8000-000000000001
- *         corporate_name: Tech Solutions Ltda
- *         trade_name: TechSol
- *         cnpj: "12.345.678/0001-90"
- *         phone: "(48) 3333-4444"
- *         created_at: "2026-08-10T09:00:00.000Z"
+ *         id: { type: integer, example: 1 }
+ *         corporate_name: { type: string, example: Tech Solutions Ltda }
+ *         trade_name: { type: string, example: TechSol }
+ *         cnpj: { type: string, example: "12.345.678/0001-90" }
+ *         phone: { type: string, example: "(48) 99999-0000" }
+ *         created_at: { type: string, format: date-time }
+ *     EmpresaInput:
+ *       type: object
+ *       required: [corporate_name, trade_name, cnpj]
+ *       properties:
+ *         corporate_name: { type: string, example: Tech Solutions Ltda }
+ *         trade_name: { type: string, example: TechSol }
+ *         cnpj: { type: string, example: "12.345.678/0001-90" }
+ *         phone: { type: string, example: "(48) 99999-0000" }
  */
 
-/**
- * @swagger
- * tags:
- *   name: Empresas
- *   description: API de Controle de Empresas parceiras/solicitantes
- */
-
+// ---------- GET /empresas ----------
 /**
  * @swagger
  * /empresas:
@@ -68,51 +44,52 @@ function saveEmpresas(empresas) {
  *     tags: [Empresas]
  *     responses:
  *       200:
- *         description: A lista de empresas
+ *         description: Lista de empresas
  *         content:
  *           application/json:
  *             schema:
  *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Empresa'
+ *               items: { $ref: '#/components/schemas/Empresa' }
  */
-router.get("/", (req, res) => {
-  const empresas = loadEmpresas();
-  res.json(empresas);
+router.get('/', (req, res) => {
+  res.json(ler());
 });
 
+// ---------- GET /empresas/nome/:nome ----------
 /**
  * @swagger
- * /empresas/nome/{name}:
+ * /empresas/nome/{nome}:
  *   get:
  *     summary: Retorna empresas cujo nome fantasia contém o termo pesquisado
  *     tags: [Empresas]
  *     parameters:
  *       - in: path
- *         name: name
- *         schema:
- *           type: string
+ *         name: nome
  *         required: true
- *         description: Nome fantasia (ou parte do nome) da empresa
+ *         schema: { type: string }
+ *         example: tech
  *     responses:
  *       200:
- *         description: Lista de empresas encontradas
+ *         description: Empresas encontradas
  *         content:
  *           application/json:
  *             schema:
  *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Empresa'
+ *               items: { $ref: '#/components/schemas/Empresa' }
+ *       404:
+ *         description: Nenhuma empresa encontrada
  */
-router.get("/nome/:name", (req, res) => {
-  const empresas = loadEmpresas();
-  const termo = req.params.name.toLowerCase();
-  const encontradas = empresas.filter((e) =>
-    e.trade_name.toLowerCase().includes(termo)
-  );
-  res.json(encontradas);
+router.get('/nome/:nome', (req, res) => {
+  const termo = normalizar(req.params.nome);
+  const resultado = ler().filter((e) => normalizar(e.trade_name).includes(termo));
+
+  if (resultado.length === 0) {
+    return res.status(404).json({ erro: 'Nenhuma empresa encontrada com esse nome fantasia' });
+  }
+  res.json(resultado);
 });
 
+// ---------- GET /empresas/cnpj/:cnpj ----------
 /**
  * @swagger
  * /empresas/cnpj/{cnpj}:
@@ -122,29 +99,119 @@ router.get("/nome/:name", (req, res) => {
  *     parameters:
  *       - in: path
  *         name: cnpj
- *         schema:
- *           type: string
  *         required: true
- *         description: CNPJ da empresa
+ *         description: CNPJ com ou sem pontuação
+ *         schema: { type: string }
+ *         example: "12345678000190"
  *     responses:
  *       200:
- *         description: A empresa encontrada
+ *         description: Empresa encontrada
  *         content:
  *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Empresa'
+ *             schema: { $ref: '#/components/schemas/Empresa' }
  *       404:
  *         description: Empresa não encontrada
  */
-router.get("/cnpj/:cnpj", (req, res) => {
-  const empresas = loadEmpresas();
-  const empresa = empresas.find((e) => e.cnpj === req.params.cnpj);
-  if (!empresa) {
-    return res.status(404).json({ message: "Empresa não encontrada" });
-  }
+router.get('/cnpj/:cnpj', (req, res) => {
+  const alvo = soDigitos(req.params.cnpj);
+  const empresa = ler().find((e) => soDigitos(e.cnpj) === alvo);
+
+  if (!empresa) return res.status(404).json({ erro: 'Empresa não encontrada' });
   res.json(empresa);
 });
 
+// ---------- GET /empresas/data (intervalo) ----------
+/**
+ * @swagger
+ * /empresas/data:
+ *   get:
+ *     summary: Retorna empresas cadastradas dentro de um intervalo de datas
+ *     tags: [Empresas]
+ *     parameters:
+ *       - in: query
+ *         name: inicio
+ *         schema: { type: string, format: date }
+ *         example: "2026-10-01"
+ *       - in: query
+ *         name: fim
+ *         schema: { type: string, format: date }
+ *         example: "2026-10-31"
+ *     responses:
+ *       200:
+ *         description: Empresas no intervalo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items: { $ref: '#/components/schemas/Empresa' }
+ *       400:
+ *         description: Formato de data inválido ou nenhum parâmetro informado
+ *       404:
+ *         description: Nenhuma empresa encontrada
+ */
+router.get('/data', (req, res) => {
+  const { inicio, fim } = req.query;
+
+  if (!inicio && !fim) {
+    return res.status(400).json({ erro: 'Informe ao menos "inicio" ou "fim" (YYYY-MM-DD)' });
+  }
+  if ((inicio && !DATA_REGEX.test(inicio)) || (fim && !DATA_REGEX.test(fim))) {
+    return res.status(400).json({ erro: 'Use o formato YYYY-MM-DD' });
+  }
+
+  const resultado = ler().filter((e) => {
+    const dia = e.created_at.slice(0, 10);
+    return (!inicio || dia >= inicio) && (!fim || dia <= fim);
+  });
+
+  if (resultado.length === 0) {
+    return res.status(404).json({ erro: 'Nenhuma empresa encontrada nesse período' });
+  }
+  res.json(resultado);
+});
+
+// ---------- GET /empresas/data/:data ----------
+/**
+ * @swagger
+ * /empresas/data/{data}:
+ *   get:
+ *     summary: Retorna empresas cadastradas em uma data específica
+ *     tags: [Empresas]
+ *     parameters:
+ *       - in: path
+ *         name: data
+ *         required: true
+ *         schema: { type: string, format: date }
+ *         example: "2026-10-01"
+ *     responses:
+ *       200:
+ *         description: Empresas cadastradas na data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items: { $ref: '#/components/schemas/Empresa' }
+ *       400:
+ *         description: Formato de data inválido
+ *       404:
+ *         description: Nenhuma empresa encontrada
+ */
+router.get('/data/:data', (req, res) => {
+  const { data } = req.params;
+
+  if (!DATA_REGEX.test(data)) {
+    return res.status(400).json({ erro: 'Use o formato YYYY-MM-DD' });
+  }
+
+  const resultado = ler().filter((e) => e.created_at.slice(0, 10) === data);
+
+  if (resultado.length === 0) {
+    return res.status(404).json({ erro: 'Nenhuma empresa cadastrada nessa data' });
+  }
+  res.json(resultado);
+});
+
+// ---------- GET /empresas/:id (SEMPRE depois das rotas com prefixo) ----------
 /**
  * @swagger
  * /empresas/{id}:
@@ -154,29 +221,24 @@ router.get("/cnpj/:cnpj", (req, res) => {
  *     parameters:
  *       - in: path
  *         name: id
- *         schema:
- *           type: string
  *         required: true
- *         description: ID da empresa
+ *         schema: { type: integer }
  *     responses:
  *       200:
- *         description: A empresa pelo ID
+ *         description: Empresa encontrada
  *         content:
  *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Empresa'
+ *             schema: { $ref: '#/components/schemas/Empresa' }
  *       404:
  *         description: Empresa não encontrada
  */
-router.get("/:id", (req, res) => {
-  const empresas = loadEmpresas();
-  const empresa = empresas.find((e) => e.id === req.params.id);
-  if (!empresa) {
-    return res.status(404).json({ message: "Empresa não encontrada" });
-  }
+router.get('/:id', (req, res) => {
+  const empresa = ler().find((e) => e.id === Number(req.params.id));
+  if (!empresa) return res.status(404).json({ erro: 'Empresa não encontrada' });
   res.json(empresa);
 });
 
+// ---------- POST /empresas ----------
 /**
  * @swagger
  * /empresas:
@@ -187,29 +249,47 @@ router.get("/:id", (req, res) => {
  *       required: true
  *       content:
  *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Empresa'
+ *           schema: { $ref: '#/components/schemas/EmpresaInput' }
  *     responses:
  *       201:
- *         description: A empresa foi criada com sucesso
+ *         description: Empresa criada
  *         content:
  *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Empresa'
+ *             schema: { $ref: '#/components/schemas/Empresa' }
+ *       400:
+ *         description: Campos obrigatórios ausentes
+ *       409:
+ *         description: CNPJ já cadastrado
  */
-router.post("/", (req, res) => {
-  const empresas = loadEmpresas();
-  const novaEmpresa = {
-    ...req.body,
-    id: crypto.randomUUID(),
+router.post('/', (req, res) => {
+  const { corporate_name, trade_name, cnpj, phone } = req.body;
+
+  if (!corporate_name || !trade_name || !cnpj) {
+    return res.status(400).json({
+      erro: 'Campos obrigatórios: corporate_name, trade_name, cnpj',
+    });
+  }
+
+  const empresas = ler();
+  if (empresas.some((e) => soDigitos(e.cnpj) === soDigitos(cnpj))) {
+    return res.status(409).json({ erro: 'CNPJ já cadastrado' });
+  }
+
+  const nova = {
+    id: empresas.length ? Math.max(...empresas.map((e) => e.id)) + 1 : 1,
+    corporate_name,
+    trade_name,
+    cnpj,
+    phone: phone ?? null,
     created_at: new Date().toISOString(),
   };
-  empresas.push(novaEmpresa);
-  saveEmpresas(empresas);
-  res.status(201).json(novaEmpresa);
 
+  empresas.push(nova);
+  salvar(empresas);
+  res.status(201).json(nova);
 });
 
+// ---------- PUT /empresas/:id ----------
 /**
  * @swagger
  * /empresas/{id}:
@@ -219,37 +299,52 @@ router.post("/", (req, res) => {
  *     parameters:
  *       - in: path
  *         name: id
- *         schema:
- *           type: string
  *         required: true
- *         description: ID da empresa
+ *         schema: { type: integer }
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Empresa'
+ *           schema: { $ref: '#/components/schemas/EmpresaInput' }
  *     responses:
  *       200:
- *         description: A empresa foi atualizada com sucesso
+ *         description: Empresa atualizada
  *         content:
  *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Empresa'
+ *             schema: { $ref: '#/components/schemas/Empresa' }
  *       404:
  *         description: Empresa não encontrada
+ *       409:
+ *         description: CNPJ já em uso por outra empresa
  */
-router.put("/:id", (req, res) => {
-  const empresas = loadEmpresas();
-  const index = empresas.findIndex((e) => e.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ message: "Empresa não encontrada" });
+router.put('/:id', (req, res) => {
+  const empresas = ler();
+  const indice = empresas.findIndex((e) => e.id === Number(req.params.id));
+  if (indice === -1) return res.status(404).json({ erro: 'Empresa não encontrada' });
+
+  const { corporate_name, trade_name, cnpj, phone } = req.body;
+
+  if (
+    cnpj &&
+    empresas.some((e, i) => i !== indice && soDigitos(e.cnpj) === soDigitos(cnpj))
+  ) {
+    return res.status(409).json({ erro: 'CNPJ já em uso por outra empresa' });
   }
-  empresas[index] = { ...empresas[index], ...req.body, id: empresas[index].id };
-  saveEmpresas(empresas);
-  res.json(empresas[index]);
+
+  const atual = empresas[indice];
+  empresas[indice] = {
+    ...atual, // id e created_at nunca mudam
+    corporate_name: corporate_name ?? atual.corporate_name,
+    trade_name: trade_name ?? atual.trade_name,
+    cnpj: cnpj ?? atual.cnpj,
+    phone: phone !== undefined ? phone : atual.phone,
+  };
+
+  salvar(empresas);
+  res.json(empresas[indice]);
 });
 
+// ---------- DELETE /empresas/:id ----------
 /**
  * @swagger
  * /empresas/{id}:
@@ -259,25 +354,22 @@ router.put("/:id", (req, res) => {
  *     parameters:
  *       - in: path
  *         name: id
- *         schema:
- *           type: string
  *         required: true
- *         description: ID da empresa
+ *         schema: { type: integer }
  *     responses:
  *       200:
- *         description: A empresa foi removida com sucesso
+ *         description: Empresa removida
  *       404:
  *         description: Empresa não encontrada
  */
-router.delete("/:id", (req, res) => {
-  const empresas = loadEmpresas();
-  const index = empresas.findIndex((e) => e.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ message: "Empresa não encontrada" });
-  }
-  const removida = empresas.splice(index, 1);
-  saveEmpresas(empresas);
-  res.json(removida[0]);
+router.delete('/:id', (req, res) => {
+  const empresas = ler();
+  const indice = empresas.findIndex((e) => e.id === Number(req.params.id));
+  if (indice === -1) return res.status(404).json({ erro: 'Empresa não encontrada' });
+
+  const [removida] = empresas.splice(indice, 1);
+  salvar(empresas);
+  res.json({ mensagem: 'Empresa removida com sucesso', empresa: removida });
 });
 
 module.exports = router;

@@ -30,7 +30,7 @@ const options = {
     },
     servers: [
       {
-        url: `http://localhost:${PORT}/api/`,
+       url: `http://localhost:${PORT}`,
         description: "Development server",
       },
     ],
