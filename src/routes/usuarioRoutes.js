@@ -45,7 +45,7 @@ const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  * /usuarios:
  *   get:
  *     summary: Retorna uma lista de todos os usuários
- *     tags: [Usuários]
+ *     tags: [Usuários-Liliane Antunes]
  *     responses:
  *       200:
  *         description: Lista de usuários
@@ -65,7 +65,7 @@ router.get('/', (req, res) => {
  * /usuarios/nome/{nome}:
  *   get:
  *     summary: Retorna usuários cujo nome contém o termo pesquisado
- *     tags: [Usuários]
+ *     tags: [Usuários-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: nome
@@ -99,7 +99,7 @@ router.get('/nome/:nome', (req, res) => {
  * /usuarios/data:
  *   get:
  *     summary: Retorna usuários cadastrados dentro de um intervalo de datas
- *     tags: [Usuários]
+ *     tags: [Usuários-Liliane Antunes]
  *     parameters:
  *       - in: query
  *         name: inicio
@@ -149,7 +149,7 @@ router.get('/data', (req, res) => {
  * /usuarios/data/{data}:
  *   get:
  *     summary: Retorna usuários cadastrados em uma data específica
- *     tags: [Usuários]
+ *     tags: [Usuários-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: data
@@ -190,7 +190,7 @@ router.get('/data/:data', (req, res) => {
  * /usuarios/{id}:
  *   get:
  *     summary: Retorna um usuário pelo ID
- *     tags: [Usuários]
+ *     tags: [Usuários-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: id
@@ -217,7 +217,7 @@ router.get('/:id', (req, res) => {
  * /usuarios:
  *   post:
  *     summary: Cria um novo usuário
- *     tags: [Usuários]
+ *     tags: [Usuários-Liliane Antunes]
  *     requestBody:
  *       required: true
  *       content:
@@ -273,7 +273,7 @@ router.post('/', (req, res) => {
  * /usuarios/{id}:
  *   put:
  *     summary: Atualiza um usuário pelo ID
- *     tags: [Usuários]
+ *     tags: [Usuários-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: id
@@ -337,7 +337,7 @@ router.put('/:id', (req, res) => {
  * /usuarios/{id}:
  *   delete:
  *     summary: Remove um usuário pelo ID
- *     tags: [Usuários]
+ *     tags: [Usuários-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: id

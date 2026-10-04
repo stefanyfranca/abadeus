@@ -41,7 +41,7 @@ const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  * /empresas:
  *   get:
  *     summary: Retorna uma lista de todas as empresas
- *     tags: [Empresas]
+ *     tags: [Empresas-Liliane Antunes]
  *     responses:
  *       200:
  *         description: Lista de empresas
@@ -61,7 +61,7 @@ router.get('/', (req, res) => {
  * /empresas/nome/{nome}:
  *   get:
  *     summary: Retorna empresas cujo nome fantasia contém o termo pesquisado
- *     tags: [Empresas]
+ *     tags: [Empresas-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: nome
@@ -95,7 +95,7 @@ router.get('/nome/:nome', (req, res) => {
  * /empresas/cnpj/{cnpj}:
  *   get:
  *     summary: Retorna uma empresa pelo CNPJ
- *     tags: [Empresas]
+ *     tags: [Empresas-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: cnpj
@@ -126,7 +126,7 @@ router.get('/cnpj/:cnpj', (req, res) => {
  * /empresas/data:
  *   get:
  *     summary: Retorna empresas cadastradas dentro de um intervalo de datas
- *     tags: [Empresas]
+ *     tags: [Empresas-Liliane Antunes]
  *     parameters:
  *       - in: query
  *         name: inicio
@@ -176,7 +176,7 @@ router.get('/data', (req, res) => {
  * /empresas/data/{data}:
  *   get:
  *     summary: Retorna empresas cadastradas em uma data específica
- *     tags: [Empresas]
+ *     tags: [Empresas-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: data
@@ -217,7 +217,7 @@ router.get('/data/:data', (req, res) => {
  * /empresas/{id}:
  *   get:
  *     summary: Retorna uma empresa pelo ID
- *     tags: [Empresas]
+ *     tags: [Empresas-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: id
@@ -244,7 +244,7 @@ router.get('/:id', (req, res) => {
  * /empresas:
  *   post:
  *     summary: Cria uma nova empresa
- *     tags: [Empresas]
+ *     tags: [Empresas-Liliane Antunes]
  *     requestBody:
  *       required: true
  *       content:
@@ -295,7 +295,7 @@ router.post('/', (req, res) => {
  * /empresas/{id}:
  *   put:
  *     summary: Atualiza uma empresa pelo ID
- *     tags: [Empresas]
+ *     tags: [Empresas-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: id
@@ -350,7 +350,7 @@ router.put('/:id', (req, res) => {
  * /empresas/{id}:
  *   delete:
  *     summary: Remove uma empresa pelo ID
- *     tags: [Empresas]
+ *     tags: [Empresas-Liliane Antunes]
  *     parameters:
  *       - in: path
  *         name: id
