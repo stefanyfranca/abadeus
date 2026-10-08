@@ -37,13 +37,6 @@ function validate(body) {
 
 /**
  * @swagger
- * tags:
- *   name: Espaços - Stefany França
- *   description: Gestão de espaços Abadeus 
- */
-
-/**
- * @swagger
  * components:
  *   schemas:
  *     Space:
@@ -115,7 +108,7 @@ function validate(body) {
  *   get:
  *     summary: Lista todos os espaços
  *     description: Retorna todos os espaços cadastrados. Aceita filtros opcionais por nome, tipo e status.
- *     tags: [Spaces]
+ *     tags: [Espaços - Stefany França]
  *     parameters:
  *       - in: query
  *         name: name
@@ -168,7 +161,7 @@ router.get("/", (req, res) => {
  * /spaces/{id}:
  *   get:
  *     summary: Busca um espaço por ID
- *     tags: [Spaces]
+ *     tags: [Espaços - Stefany França]
  *     parameters:
  *       - in: path
  *         name: id
@@ -204,7 +197,7 @@ router.get("/:id", (req, res) => {
  * /spaces:
  *   post:
  *     summary: Cadastra um novo espaço
- *     tags: [Spaces]
+ *     tags: [Espaços - Stefany França]
  *     requestBody:
  *       required: true
  *       content:
@@ -253,7 +246,7 @@ router.post("/", (req, res) => {
  * /spaces/{id}:
  *   put:
  *     summary: Atualiza um espaço existente
- *     tags: [Spaces]
+ *     tags: [Espaços - Stefany França]
  *     parameters:
  *       - in: path
  *         name: id
@@ -318,7 +311,7 @@ router.put("/:id", (req, res) => {
  * /spaces/{id}:
  *   delete:
  *     summary: Remove um espaço
- *     tags: [Spaces]
+ *     tags: [Espaços - Stefany França]
  *     parameters:
  *       - in: path
  *         name: id
