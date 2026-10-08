@@ -1,0 +1,10 @@
+[
+  {
+    "id": 1,
+    "corporate_name": "Tech Solutions Ltda",
+    "trade_name": "TechSol",
+    "cnpj": "12.345.678/0001-90",
+    "phone": "(48) 99999-0000",
+    "created_at": "2026-10-01T09:00:00.000Z"
+  }
+]
