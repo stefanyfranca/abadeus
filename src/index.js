@@ -7,6 +7,7 @@ const spacesRoutes = require("./routes/spacesRoutes");
 const bookingsRoutes = require("./routes/bookingsRoutes");
 const usuarioRoutes = require("./routes/usuarioRoutes");
 const empresasRoutes = require("./routes/empresasRoutes");
+const disponibilidadesRoutes = require("./routes/disponibilidadesRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,6 +33,7 @@ const specs = swaggerJsdoc({
     tags: [
       { name: "Espaços - Stefany França", description: "Spaces" },
       { name: "Reservas - Emanoel Clezar", description: "Bookings" },
+      { name: "Disponibilidades", description: "Disponibilidade semanal dos espaços" },
     ],
   },
   apis: ["./src/routes/*.js"],
@@ -46,6 +48,7 @@ app.use("/empresas", empresasRoutes);
 app.get("/", (req, res) => {
   res.send("API SGEC rodando! Acesse /api-docs para ver a documentação.");
 });
+app.use("/disponibilidades", disponibilidadesRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
