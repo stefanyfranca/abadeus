@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "space_id": 1,
+    "day_of_week": 1,
+    "start_time": "08:00",
+    "end_time": "12:00",
+    "is_external_allowed": false
+  },
+  {
+    "id": 2,
+    "space_id": 1,
+    "day_of_week": 1,
+    "start_time": "13:00",
+    "end_time": "17:00",
+    "is_external_allowed": true
+  },
+  {
+    "id": 3,
+    "space_id": 2,
+    "day_of_week": 2,
+    "start_time": "09:00",
+    "end_time": "18:00",
+    "is_external_allowed": true
+  },
+  {
+    "id": 4,
+    "space_id": 6,
+    "day_of_week": 5,
+    "start_time": "08:30",
+    "end_time": "16:30",
+    "is_external_allowed": false
+  },
+  {
+    "id": 5,
+    "space_id": 10,
+    "day_of_week": 6,
+    "start_time": "10:00",
+    "end_time": "14:00",
+    "is_external_allowed": true
+  }
+]
