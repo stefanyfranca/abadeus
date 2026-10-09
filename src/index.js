@@ -4,6 +4,7 @@ const swaggerUi = require("swagger-ui-express");
 
 const spacesRoutes = require("./routes/spacesRoutes");
 const bookingsRoutes = require("./routes/bookingsRoutes");
+const availabilitiesRoutes = require("./routes/availabilitiesRoutes");
 
 const app = express();
 const PORT = 3000;
@@ -22,6 +23,7 @@ const specs = swaggerJsdoc({
     tags: [
       { name: "Espaços - Stefany França", description: "Spaces" },
       { name: "Reservas - Emanoel Clezar", description: "Bookings" },
+      { name: "Disponibilidades Ricardo Nazário", description: "Disponibilidades dos espaços" },
     ],
   },
   apis: ["./src/routes/*.js"],
@@ -30,6 +32,7 @@ const specs = swaggerJsdoc({
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 app.use("/spaces", spacesRoutes);
 app.use("/bookings", bookingsRoutes);
+app.use("/availabilities", availabilitiesRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
