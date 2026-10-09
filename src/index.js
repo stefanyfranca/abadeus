@@ -23,7 +23,7 @@ const specs = swaggerJsdoc({
       version: "1.0.0",
       description: "API para gestão de espaços de coworking e laboratórios multidisciplinares. Disciplina: DAII 2026.02.",
       license: {
-        name: "Licenciado para DAII",
+        name: "",
       },
       contact: {
         name: "Equipe SGEC - ABADEUS",
