@@ -19,7 +19,7 @@ const specs = swaggerJsdoc({
   definition: {
     openapi: "3.0.0",
     info: {
-      title: "SGEC - Sistema de Gestão de Espaços de Coworking",
+      title: "ABADEUS - Sistema de Gestão de Espaços de Coworking",
       version: "1.0.0",
       description: "API para gestão de espaços de coworking e laboratórios multidisciplinares. Disciplina: DAII 2026.02.",
       license: {

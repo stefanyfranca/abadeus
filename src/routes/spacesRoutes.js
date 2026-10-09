@@ -14,7 +14,6 @@ function saveSpaces(spaces) {
   fs.writeFileSync(DB_PATH, JSON.stringify(spaces, null, 2), "utf-8");
 }
 
-// Retorna mensagem de erro ou null se os dados forem válidos
 function validate(body) {
   const { name, type, capacity, description, is_active } = body;
   if (typeof name !== "string" || name.trim() === "") {
