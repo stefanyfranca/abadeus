@@ -1,17 +1,24 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
+const express = require("express");
+const Usuario = require("../models/usuario");
+const { idValido, tratarErro } = require("../utils/http");
 
 const router = express.Router();
-const DB_PATH = path.join(__dirname, '..', 'db', 'usuarios.json');
-const ROLES = ['ADMIN', 'CLIENT', 'RECEPTION'];
+const ROLES = ["ADMIN", "CLIENT", "RECEPTION"];
 
-const ler = () => JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
-const salvar = (dados) => fs.writeFileSync(DB_PATH, JSON.stringify(dados, null, 2));
-const semSenha = ({ password_hash, ...resto }) => resto; // nunca devolver o hash
 const normalizar = (t) =>
-  String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const dataValida = (d) => DATA_REGEX.test(d) && !Number.isNaN(Date.parse(d));
+const erro = (res, err) => tratarErro(res, err, "erro");
+
+// O password_hash nunca sai nas respostas: o model remove no toJSON.
+
+function filtroPorIntervalo(inicio, fim) {
+  const filtro = {};
+  if (inicio) filtro.$gte = new Date(`${inicio}T00:00:00.000Z`);
+  if (fim) filtro.$lte = new Date(`${fim}T23:59:59.999Z`);
+  return { created_at: filtro };
+}
 
 /**
  * @swagger
@@ -20,12 +27,12 @@ const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  *     Usuario:
  *       type: object
  *       properties:
- *         id: { type: integer, example: 1 }
+ *         id: { type: string, example: "65f1c2a4e1b2c3d4e5f60718" }
  *         name: { type: string, example: Maria Silva }
  *         email: { type: string, example: maria@email.com }
  *         role: { type: string, enum: [ADMIN, CLIENT, RECEPTION] }
  *         cpf_cnpj: { type: string, example: "123.456.789-00" }
- *         company_id: { type: integer, nullable: true, example: 1 }
+ *         company_id: { type: string, nullable: true, example: "65f1c2a4e1b2c3d4e5f60719" }
  *         created_at: { type: string, format: date-time }
  *     UsuarioInput:
  *       type: object
@@ -36,7 +43,7 @@ const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  *         password_hash: { type: string, example: "$2b$10$hash" }
  *         role: { type: string, enum: [ADMIN, CLIENT, RECEPTION] }
  *         cpf_cnpj: { type: string, example: "123.456.789-00" }
- *         company_id: { type: integer, nullable: true, example: 1 }
+ *         company_id: { type: string, nullable: true, example: "65f1c2a4e1b2c3d4e5f60719" }
  */
 
 // ---------- GET /usuarios ----------
@@ -55,8 +62,12 @@ const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  *               type: array
  *               items: { $ref: '#/components/schemas/Usuario' }
  */
-router.get('/', (req, res) => {
-  res.json(ler().map(semSenha));
+router.get("/", async (req, res) => {
+  try {
+    res.json(await Usuario.find());
+  } catch (err) {
+    erro(res, err);
+  }
 });
 
 // ---------- GET /usuarios/nome/:nome ----------
@@ -83,14 +94,18 @@ router.get('/', (req, res) => {
  *       404:
  *         description: Nenhum usuário encontrado
  */
-router.get('/nome/:nome', (req, res) => {
-  const termo = normalizar(req.params.nome);
-  const resultado = ler().filter((u) => normalizar(u.name).includes(termo));
+router.get("/nome/:nome", async (req, res) => {
+  try {
+    const termo = normalizar(req.params.nome);
+    const resultado = (await Usuario.find()).filter((u) => normalizar(u.name).includes(termo));
 
-  if (resultado.length === 0) {
-    return res.status(404).json({ erro: 'Nenhum usuário encontrado com esse nome' });
+    if (resultado.length === 0) {
+      return res.status(404).json({ erro: "Nenhum usuário encontrado com esse nome" });
+    }
+    res.json(resultado);
+  } catch (err) {
+    erro(res, err);
   }
-  res.json(resultado.map(semSenha));
 });
 
 // ---------- GET /usuarios/data (intervalo) ----------
@@ -122,25 +137,25 @@ router.get('/nome/:nome', (req, res) => {
  *       404:
  *         description: Nenhum usuário encontrado
  */
-router.get('/data', (req, res) => {
-  const { inicio, fim } = req.query;
+router.get("/data", async (req, res) => {
+  try {
+    const { inicio, fim } = req.query;
 
-  if (!inicio && !fim) {
-    return res.status(400).json({ erro: 'Informe ao menos "inicio" ou "fim" (YYYY-MM-DD)' });
-  }
-  if ((inicio && !DATA_REGEX.test(inicio)) || (fim && !DATA_REGEX.test(fim))) {
-    return res.status(400).json({ erro: 'Use o formato YYYY-MM-DD' });
-  }
+    if (!inicio && !fim) {
+      return res.status(400).json({ erro: 'Informe ao menos "inicio" ou "fim" (YYYY-MM-DD)' });
+    }
+    if ((inicio && !dataValida(inicio)) || (fim && !dataValida(fim))) {
+      return res.status(400).json({ erro: "Use o formato YYYY-MM-DD" });
+    }
 
-  const resultado = ler().filter((u) => {
-    const dia = u.created_at.slice(0, 10);
-    return (!inicio || dia >= inicio) && (!fim || dia <= fim);
-  });
-
-  if (resultado.length === 0) {
-    return res.status(404).json({ erro: 'Nenhum usuário encontrado nesse período' });
+    const resultado = await Usuario.find(filtroPorIntervalo(inicio, fim));
+    if (resultado.length === 0) {
+      return res.status(404).json({ erro: "Nenhum usuário encontrado nesse período" });
+    }
+    res.json(resultado);
+  } catch (err) {
+    erro(res, err);
   }
-  res.json(resultado.map(semSenha));
 });
 
 // ---------- GET /usuarios/data/:data ----------
@@ -169,19 +184,22 @@ router.get('/data', (req, res) => {
  *       404:
  *         description: Nenhum usuário encontrado
  */
-router.get('/data/:data', (req, res) => {
-  const { data } = req.params;
+router.get("/data/:data", async (req, res) => {
+  try {
+    const { data } = req.params;
 
-  if (!DATA_REGEX.test(data)) {
-    return res.status(400).json({ erro: 'Use o formato YYYY-MM-DD' });
+    if (!dataValida(data)) {
+      return res.status(400).json({ erro: "Use o formato YYYY-MM-DD" });
+    }
+
+    const resultado = await Usuario.find(filtroPorIntervalo(data, data));
+    if (resultado.length === 0) {
+      return res.status(404).json({ erro: "Nenhum usuário cadastrado nessa data" });
+    }
+    res.json(resultado);
+  } catch (err) {
+    erro(res, err);
   }
-
-  const resultado = ler().filter((u) => u.created_at.slice(0, 10) === data);
-
-  if (resultado.length === 0) {
-    return res.status(404).json({ erro: 'Nenhum usuário cadastrado nessa data' });
-  }
-  res.json(resultado.map(semSenha));
 });
 
 // ---------- GET /usuarios/:id (SEMPRE depois das rotas com prefixo) ----------
@@ -195,7 +213,7 @@ router.get('/data/:data', (req, res) => {
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: string }
  *     responses:
  *       200:
  *         description: Usuário encontrado
@@ -205,10 +223,15 @@ router.get('/data/:data', (req, res) => {
  *       404:
  *         description: Usuário não encontrado
  */
-router.get('/:id', (req, res) => {
-  const usuario = ler().find((u) => u.id === Number(req.params.id));
-  if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado' });
-  res.json(semSenha(usuario));
+router.get("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ erro: "Usuário não encontrado" });
+    const usuario = await Usuario.findById(req.params.id);
+    if (!usuario) return res.status(404).json({ erro: "Usuário não encontrado" });
+    res.json(usuario);
+  } catch (err) {
+    erro(res, err);
+  }
 });
 
 // ---------- POST /usuarios ----------
@@ -234,37 +257,38 @@ router.get('/:id', (req, res) => {
  *       409:
  *         description: E-mail já cadastrado
  */
-router.post('/', (req, res) => {
-  const { name, email, password_hash, role, cpf_cnpj, company_id } = req.body;
+router.post("/", async (req, res) => {
+  try {
+    const { name, email, password_hash, role, cpf_cnpj, company_id } = req.body;
 
-  if (!name || !email || !password_hash || !role || !cpf_cnpj) {
-    return res.status(400).json({
-      erro: 'Campos obrigatórios: name, email, password_hash, role, cpf_cnpj',
+    if (!name || !email || !password_hash || !role || !cpf_cnpj) {
+      return res.status(400).json({
+        erro: "Campos obrigatórios: name, email, password_hash, role, cpf_cnpj",
+      });
+    }
+    if (!ROLES.includes(role)) {
+      return res.status(400).json({ erro: `role deve ser: ${ROLES.join(", ")}` });
+    }
+    if (company_id != null && !idValido(company_id)) {
+      return res.status(400).json({ erro: "company_id deve ser um ID válido" });
+    }
+
+    if (await Usuario.exists({ email: String(email).toLowerCase() })) {
+      return res.status(409).json({ erro: "E-mail já cadastrado" });
+    }
+
+    const novo = await Usuario.create({
+      name,
+      email,
+      password_hash,
+      role,
+      cpf_cnpj,
+      company_id: company_id ?? null,
     });
+    res.status(201).json(novo);
+  } catch (err) {
+    erro(res, err);
   }
-  if (!ROLES.includes(role)) {
-    return res.status(400).json({ erro: `role deve ser: ${ROLES.join(', ')}` });
-  }
-
-  const usuarios = ler();
-  if (usuarios.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-    return res.status(409).json({ erro: 'E-mail já cadastrado' });
-  }
-
-  const novo = {
-    id: usuarios.length ? Math.max(...usuarios.map((u) => u.id)) + 1 : 1,
-    name,
-    email,
-    password_hash,
-    role,
-    cpf_cnpj,
-    company_id: company_id ?? null,
-    created_at: new Date().toISOString(),
-  };
-
-  usuarios.push(novo);
-  salvar(usuarios);
-  res.status(201).json(semSenha(novo));
 });
 
 // ---------- PUT /usuarios/:id ----------
@@ -278,7 +302,7 @@ router.post('/', (req, res) => {
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: string }
  *     requestBody:
  *       required: true
  *       content:
@@ -297,38 +321,37 @@ router.post('/', (req, res) => {
  *       409:
  *         description: E-mail já em uso por outro usuário
  */
-router.put('/:id', (req, res) => {
-  const usuarios = ler();
-  const indice = usuarios.findIndex((u) => u.id === Number(req.params.id));
-  if (indice === -1) return res.status(404).json({ erro: 'Usuário não encontrado' });
+router.put("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ erro: "Usuário não encontrado" });
+    const usuario = await Usuario.findById(req.params.id);
+    if (!usuario) return res.status(404).json({ erro: "Usuário não encontrado" });
 
-  const { name, email, password_hash, role, cpf_cnpj, company_id } = req.body;
+    const { name, email, password_hash, role, cpf_cnpj, company_id } = req.body;
 
-  if (role && !ROLES.includes(role)) {
-    return res.status(400).json({ erro: `role deve ser: ${ROLES.join(', ')}` });
+    if (role && !ROLES.includes(role)) {
+      return res.status(400).json({ erro: `role deve ser: ${ROLES.join(", ")}` });
+    }
+    if (company_id != null && !idValido(company_id)) {
+      return res.status(400).json({ erro: "company_id deve ser um ID válido" });
+    }
+    if (email && (await Usuario.exists({ email: String(email).toLowerCase(), _id: { $ne: usuario._id } }))) {
+      return res.status(409).json({ erro: "E-mail já em uso por outro usuário" });
+    }
+
+    usuario.set({
+      name: name ?? usuario.name,
+      email: email ?? usuario.email,
+      password_hash: password_hash ?? usuario.password_hash,
+      role: role ?? usuario.role,
+      cpf_cnpj: cpf_cnpj ?? usuario.cpf_cnpj,
+      company_id: company_id !== undefined ? company_id : usuario.company_id,
+    });
+    await usuario.save();
+    res.json(usuario);
+  } catch (err) {
+    erro(res, err);
   }
-  if (
-    email &&
-    usuarios.some(
-      (u, i) => i !== indice && u.email.toLowerCase() === email.toLowerCase()
-    )
-  ) {
-    return res.status(409).json({ erro: 'E-mail já em uso por outro usuário' });
-  }
-
-  const atual = usuarios[indice];
-  usuarios[indice] = {
-    ...atual, // id e created_at nunca mudam
-    name: name ?? atual.name,
-    email: email ?? atual.email,
-    password_hash: password_hash ?? atual.password_hash,
-    role: role ?? atual.role,
-    cpf_cnpj: cpf_cnpj ?? atual.cpf_cnpj,
-    company_id: company_id !== undefined ? company_id : atual.company_id,
-  };
-
-  salvar(usuarios);
-  res.json(semSenha(usuarios[indice]));
 });
 
 // ---------- DELETE /usuarios/:id ----------
@@ -342,21 +365,22 @@ router.put('/:id', (req, res) => {
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: string }
  *     responses:
  *       200:
  *         description: Usuário removido
  *       404:
  *         description: Usuário não encontrado
  */
-router.delete('/:id', (req, res) => {
-  const usuarios = ler();
-  const indice = usuarios.findIndex((u) => u.id === Number(req.params.id));
-  if (indice === -1) return res.status(404).json({ erro: 'Usuário não encontrado' });
-
-  const [removido] = usuarios.splice(indice, 1);
-  salvar(usuarios);
-  res.json({ mensagem: 'Usuário removido com sucesso', usuario: semSenha(removido) });
+router.delete("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ erro: "Usuário não encontrado" });
+    const removido = await Usuario.findByIdAndDelete(req.params.id);
+    if (!removido) return res.status(404).json({ erro: "Usuário não encontrado" });
+    res.json({ mensagem: "Usuário removido com sucesso", usuario: removido });
+  } catch (err) {
+    erro(res, err);
+  }
 });
 
 module.exports = router;

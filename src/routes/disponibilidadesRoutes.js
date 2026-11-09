@@ -1,21 +1,12 @@
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
+const Disponibilidade = require("../models/Disponibilidade");
+const Espaco = require("../models/Espaco");
+const { idValido, tratarErro } = require("../utils/http");
 
 const router = express.Router();
-const DB_PATH = path.join(__dirname, "..", "db", "disponibilidades.json");
-const SPACES_PATH = path.join(__dirname, "..", "db", "espacos.json");
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-function readAvailabilities() {
-  return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-}
-
-function saveAvailabilities(availabilities) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(availabilities, null, 2), "utf-8");
-}
-
-function validate(body, availabilities, ignoredId) {
+async function validate(body, ignoredId) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return "O corpo da requisição deve ser um objeto JSON";
   }
@@ -27,8 +18,8 @@ function validate(body, availabilities, ignoredId) {
   }
 
   const { space_id, day_of_week, start_time, end_time, is_external_allowed } = body;
-  if (!Number.isInteger(space_id) || space_id <= 0) {
-    return "O campo 'space_id' deve ser um número inteiro maior que zero";
+  if (!idValido(space_id)) {
+    return "O campo 'space_id' deve ser um ID válido";
   }
   if (!Number.isInteger(day_of_week) || day_of_week < 0 || day_of_week > 6) {
     return "O campo 'day_of_week' deve ser um número inteiro entre 0 e 6";
@@ -46,21 +37,19 @@ function validate(body, availabilities, ignoredId) {
     return "O campo 'is_external_allowed' deve ser true ou false";
   }
 
-  if (fs.existsSync(SPACES_PATH)) {
-    const spaces = JSON.parse(fs.readFileSync(SPACES_PATH, "utf-8"));
-    if (!spaces.some((space) => space.id === space_id)) {
-      return "O espaço informado não foi encontrado";
-    }
+  if (!(await Espaco.exists({ _id: space_id }))) {
+    return "O espaço informado não foi encontrado";
   }
 
-  const overlaps = availabilities.some((availability) =>
-    availability.id !== ignoredId &&
-    availability.space_id === space_id &&
-    availability.day_of_week === day_of_week &&
-    start_time < availability.end_time &&
-    end_time > availability.start_time
-  );
-  if (overlaps) {
+  // Sobreposição: existente.start < novo.end  E  existente.end > novo.start
+  const filtroSobreposicao = {
+    space_id,
+    day_of_week,
+    start_time: { $lt: end_time },
+    end_time: { $gt: start_time },
+  };
+  if (ignoredId) filtroSobreposicao._id = { $ne: ignoredId };
+  if (await Disponibilidade.exists(filtroSobreposicao)) {
     return "Já existe uma disponibilidade com horário sobreposto para este espaço e dia da semana";
   }
 
@@ -76,12 +65,12 @@ function validate(body, availabilities, ignoredId) {
  *       required: [id, space_id, day_of_week, start_time, end_time, is_external_allowed]
  *       properties:
  *         id:
- *           type: integer
- *           description: ID gerado automaticamente
- *           example: 1
+ *           type: string
+ *           description: ID gerado automaticamente pelo MongoDB
+ *           example: "65f1c2a4e1b2c3d4e5f60718"
  *         space_id:
- *           type: integer
- *           example: 1
+ *           type: string
+ *           example: "65f1c2a4e1b2c3d4e5f60719"
  *         day_of_week:
  *           type: integer
  *           minimum: 0
@@ -104,8 +93,8 @@ function validate(body, availabilities, ignoredId) {
  *       required: [space_id, day_of_week, start_time, end_time, is_external_allowed]
  *       properties:
  *         space_id:
- *           type: integer
- *           example: 1
+ *           type: string
+ *           example: "65f1c2a4e1b2c3d4e5f60719"
  *         day_of_week:
  *           type: integer
  *           minimum: 0
@@ -140,8 +129,8 @@ function validate(body, availabilities, ignoredId) {
  *       - in: query
  *         name: space_id
  *         schema:
- *           type: integer
- *         example: 1
+ *           type: string
+ *         example: "65f1c2a4e1b2c3d4e5f60719"
  *       - in: query
  *         name: day_of_week
  *         schema:
@@ -160,8 +149,8 @@ function validate(body, availabilities, ignoredId) {
  *               items:
  *                 $ref: '#/components/schemas/Disponibilidade'
  *             example:
- *               - id: 1
- *                 space_id: 1
+ *               - id: "65f1c2a4e1b2c3d4e5f60718"
+ *                 space_id: "65f1c2a4e1b2c3d4e5f60719"
  *                 day_of_week: 1
  *                 start_time: "08:00"
  *                 end_time: "12:00"
@@ -173,27 +162,34 @@ function validate(body, availabilities, ignoredId) {
  *             schema:
  *               $ref: '#/components/schemas/DisponibilidadeError'
  */
-router.get("/", (req, res) => {
-  const { space_id, day_of_week } = req.query;
-  let availabilities = readAvailabilities();
+router.get("/", async (req, res) => {
+  try {
+    const { space_id, day_of_week } = req.query;
+    const filtro = {};
 
-  for (const [field, value] of [["space_id", space_id], ["day_of_week", day_of_week]]) {
-    const number = Number(value);
-    const valid = value !== undefined && String(value).trim() !== "" && Number.isInteger(number);
-    if (value !== undefined && (!valid || (field === "space_id" ? number <= 0 : number < 0 || number > 6))) {
-      return res.status(400).json({ message: `O filtro '${field}' deve ser um número inteiro válido` });
+    if (space_id !== undefined) {
+      if (!idValido(space_id)) {
+        return res.status(400).json({ message: "O filtro 'space_id' deve ser um ID válido" });
+      }
+      filtro.space_id = space_id;
     }
-    if (value !== undefined) {
-      availabilities = availabilities.filter((availability) => availability[field] === number);
+    if (day_of_week !== undefined) {
+      const number = Number(day_of_week);
+      if (String(day_of_week).trim() === "" || !Number.isInteger(number) || number < 0 || number > 6) {
+        return res.status(400).json({ message: "O filtro 'day_of_week' deve ser um número inteiro entre 0 e 6" });
+      }
+      filtro.day_of_week = number;
     }
+
+    const availabilities = await Disponibilidade.find(filtro).sort({
+      space_id: 1,
+      day_of_week: 1,
+      start_time: 1,
+    });
+    res.status(200).json(availabilities);
+  } catch (err) {
+    tratarErro(res, err);
   }
-
-  availabilities.sort((first, second) =>
-    first.space_id - second.space_id ||
-    first.day_of_week - second.day_of_week ||
-    first.start_time.localeCompare(second.start_time)
-  );
-  res.status(200).json(availabilities);
 });
 
 /**
@@ -207,8 +203,8 @@ router.get("/", (req, res) => {
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
- *         example: 1
+ *           type: string
+ *         example: "65f1c2a4e1b2c3d4e5f60718"
  *     responses:
  *       200:
  *         description: Disponibilidade encontrada
@@ -223,12 +219,15 @@ router.get("/", (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/DisponibilidadeError'
  */
-router.get("/:id", (req, res) => {
-  const availability = readAvailabilities().find((item) => item.id === Number(req.params.id));
-  if (!availability) {
-    return res.status(404).json({ message: "Disponibilidade não encontrada" });
+router.get("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ message: "Disponibilidade não encontrada" });
+    const availability = await Disponibilidade.findById(req.params.id);
+    if (!availability) return res.status(404).json({ message: "Disponibilidade não encontrada" });
+    res.status(200).json(availability);
+  } catch (err) {
+    tratarErro(res, err);
   }
-  res.status(200).json(availability);
 });
 
 /**
@@ -244,7 +243,7 @@ router.get("/:id", (req, res) => {
  *           schema:
  *             $ref: '#/components/schemas/DisponibilidadeInput'
  *           example:
- *             space_id: 1
+ *             space_id: "65f1c2a4e1b2c3d4e5f60719"
  *             day_of_week: 2
  *             start_time: "08:00"
  *             end_time: "12:00"
@@ -263,26 +262,22 @@ router.get("/:id", (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/DisponibilidadeError'
  */
-router.post("/", (req, res) => {
-  const availabilities = readAvailabilities();
-  const error = validate(req.body, availabilities);
-  if (error) {
-    return res.status(400).json({ message: error });
+router.post("/", async (req, res) => {
+  try {
+    const error = await validate(req.body);
+    if (error) return res.status(400).json({ message: error });
+
+    const newAvailability = await Disponibilidade.create({
+      space_id: req.body.space_id,
+      day_of_week: req.body.day_of_week,
+      start_time: req.body.start_time,
+      end_time: req.body.end_time,
+      is_external_allowed: req.body.is_external_allowed,
+    });
+    res.status(201).json(newAvailability);
+  } catch (err) {
+    tratarErro(res, err);
   }
-
-  const nextId = availabilities.length ? Math.max(...availabilities.map((item) => item.id)) + 1 : 1;
-  const newAvailability = {
-    id: nextId,
-    space_id: req.body.space_id,
-    day_of_week: req.body.day_of_week,
-    start_time: req.body.start_time,
-    end_time: req.body.end_time,
-    is_external_allowed: req.body.is_external_allowed,
-  };
-
-  availabilities.push(newAvailability);
-  saveAvailabilities(availabilities);
-  res.status(201).json(newAvailability);
 });
 
 /**
@@ -296,8 +291,8 @@ router.post("/", (req, res) => {
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
- *         example: 1
+ *           type: string
+ *         example: "65f1c2a4e1b2c3d4e5f60718"
  *     requestBody:
  *       required: true
  *       content:
@@ -305,7 +300,7 @@ router.post("/", (req, res) => {
  *           schema:
  *             $ref: '#/components/schemas/DisponibilidadeInput'
  *           example:
- *             space_id: 1
+ *             space_id: "65f1c2a4e1b2c3d4e5f60719"
  *             day_of_week: 2
  *             start_time: "08:00"
  *             end_time: "12:00"
@@ -330,29 +325,27 @@ router.post("/", (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/DisponibilidadeError'
  */
-router.put("/:id", (req, res) => {
-  const availabilities = readAvailabilities();
-  const index = availabilities.findIndex((item) => item.id === Number(req.params.id));
-  if (index === -1) {
-    return res.status(404).json({ message: "Disponibilidade não encontrada" });
+router.put("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ message: "Disponibilidade não encontrada" });
+    const availability = await Disponibilidade.findById(req.params.id);
+    if (!availability) return res.status(404).json({ message: "Disponibilidade não encontrada" });
+
+    const error = await validate(req.body, availability._id);
+    if (error) return res.status(400).json({ message: error });
+
+    availability.set({
+      space_id: req.body.space_id,
+      day_of_week: req.body.day_of_week,
+      start_time: req.body.start_time,
+      end_time: req.body.end_time,
+      is_external_allowed: req.body.is_external_allowed,
+    });
+    await availability.save();
+    res.status(200).json(availability);
+  } catch (err) {
+    tratarErro(res, err);
   }
-
-  const error = validate(req.body, availabilities, availabilities[index].id);
-  if (error) {
-    return res.status(400).json({ message: error });
-  }
-
-  availabilities[index] = {
-    id: availabilities[index].id,
-    space_id: req.body.space_id,
-    day_of_week: req.body.day_of_week,
-    start_time: req.body.start_time,
-    end_time: req.body.end_time,
-    is_external_allowed: req.body.is_external_allowed,
-  };
-
-  saveAvailabilities(availabilities);
-  res.status(200).json(availabilities[index]);
 });
 
 /**
@@ -366,8 +359,8 @@ router.put("/:id", (req, res) => {
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
- *         example: 1
+ *           type: string
+ *         example: "65f1c2a4e1b2c3d4e5f60718"
  *     responses:
  *       200:
  *         description: Disponibilidade removida
@@ -382,16 +375,15 @@ router.put("/:id", (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/DisponibilidadeError'
  */
-router.delete("/:id", (req, res) => {
-  const availabilities = readAvailabilities();
-  const index = availabilities.findIndex((item) => item.id === Number(req.params.id));
-  if (index === -1) {
-    return res.status(404).json({ message: "Disponibilidade não encontrada" });
+router.delete("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ message: "Disponibilidade não encontrada" });
+    const removida = await Disponibilidade.findByIdAndDelete(req.params.id);
+    if (!removida) return res.status(404).json({ message: "Disponibilidade não encontrada" });
+    res.status(200).json({ message: "Disponibilidade removida com sucesso" });
+  } catch (err) {
+    tratarErro(res, err);
   }
-
-  availabilities.splice(index, 1);
-  saveAvailabilities(availabilities);
-  res.status(200).json({ message: "Disponibilidade removida com sucesso" });
 });
 
 module.exports = router;

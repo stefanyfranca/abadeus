@@ -3,6 +3,8 @@ const cors = require("cors");
 const swaggerJsdoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 
+require('./db/connection');
+
 const spacesRoutes = require("./routes/spacesRoutes");
 const bookingsRoutes = require("./routes/bookingsRoutes");
 const usuarioRoutes = require("./routes/usuarioRoutes");

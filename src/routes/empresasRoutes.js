@@ -1,16 +1,23 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
+const express = require("express");
+const Empresa = require("../models/Empresa");
+const { idValido, tratarErro } = require("../utils/http");
 
 const router = express.Router();
-const DB_PATH = path.join(__dirname, '..', 'db', 'empresas.json');
 
-const ler = () => JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
-const salvar = (dados) => fs.writeFileSync(DB_PATH, JSON.stringify(dados, null, 2));
 const normalizar = (t) =>
-  String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const soDigitos = (t) => String(t).replace(/\D/g, '');
+  String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const soDigitos = (t) => String(t).replace(/\D/g, "");
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const dataValida = (d) => DATA_REGEX.test(d) && !Number.isNaN(Date.parse(d));
+const erro = (res, err) => tratarErro(res, err, "erro");
+
+// Monta o filtro de created_at (datas em UTC, igual ao slice(0, 10) da versão com JSON)
+function filtroPorIntervalo(inicio, fim) {
+  const filtro = {};
+  if (inicio) filtro.$gte = new Date(`${inicio}T00:00:00.000Z`);
+  if (fim) filtro.$lte = new Date(`${fim}T23:59:59.999Z`);
+  return { created_at: filtro };
+}
 
 /**
  * @swagger
@@ -19,7 +26,7 @@ const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  *     Empresa:
  *       type: object
  *       properties:
- *         id: { type: integer, example: 1 }
+ *         id: { type: string, example: "65f1c2a4e1b2c3d4e5f60718" }
  *         corporate_name: { type: string, example: Tech Solutions Ltda }
  *         trade_name: { type: string, example: TechSol }
  *         cnpj: { type: string, example: "12.345.678/0001-90" }
@@ -51,8 +58,12 @@ const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  *               type: array
  *               items: { $ref: '#/components/schemas/Empresa' }
  */
-router.get('/', (req, res) => {
-  res.json(ler());
+router.get("/", async (req, res) => {
+  try {
+    res.json(await Empresa.find());
+  } catch (err) {
+    erro(res, err);
+  }
 });
 
 // ---------- GET /empresas/nome/:nome ----------
@@ -79,14 +90,19 @@ router.get('/', (req, res) => {
  *       404:
  *         description: Nenhuma empresa encontrada
  */
-router.get('/nome/:nome', (req, res) => {
-  const termo = normalizar(req.params.nome);
-  const resultado = ler().filter((e) => normalizar(e.trade_name).includes(termo));
+router.get("/nome/:nome", async (req, res) => {
+  try {
+    const termo = normalizar(req.params.nome);
+    // Filtro em JS para manter a busca sem diferenciar acentos
+    const resultado = (await Empresa.find()).filter((e) => normalizar(e.trade_name).includes(termo));
 
-  if (resultado.length === 0) {
-    return res.status(404).json({ erro: 'Nenhuma empresa encontrada com esse nome fantasia' });
+    if (resultado.length === 0) {
+      return res.status(404).json({ erro: "Nenhuma empresa encontrada com esse nome fantasia" });
+    }
+    res.json(resultado);
+  } catch (err) {
+    erro(res, err);
   }
-  res.json(resultado);
 });
 
 // ---------- GET /empresas/cnpj/:cnpj ----------
@@ -112,12 +128,16 @@ router.get('/nome/:nome', (req, res) => {
  *       404:
  *         description: Empresa não encontrada
  */
-router.get('/cnpj/:cnpj', (req, res) => {
-  const alvo = soDigitos(req.params.cnpj);
-  const empresa = ler().find((e) => soDigitos(e.cnpj) === alvo);
+router.get("/cnpj/:cnpj", async (req, res) => {
+  try {
+    const alvo = soDigitos(req.params.cnpj);
+    const empresa = (await Empresa.find()).find((e) => soDigitos(e.cnpj) === alvo);
 
-  if (!empresa) return res.status(404).json({ erro: 'Empresa não encontrada' });
-  res.json(empresa);
+    if (!empresa) return res.status(404).json({ erro: "Empresa não encontrada" });
+    res.json(empresa);
+  } catch (err) {
+    erro(res, err);
+  }
 });
 
 // ---------- GET /empresas/data (intervalo) ----------
@@ -149,25 +169,25 @@ router.get('/cnpj/:cnpj', (req, res) => {
  *       404:
  *         description: Nenhuma empresa encontrada
  */
-router.get('/data', (req, res) => {
-  const { inicio, fim } = req.query;
+router.get("/data", async (req, res) => {
+  try {
+    const { inicio, fim } = req.query;
 
-  if (!inicio && !fim) {
-    return res.status(400).json({ erro: 'Informe ao menos "inicio" ou "fim" (YYYY-MM-DD)' });
-  }
-  if ((inicio && !DATA_REGEX.test(inicio)) || (fim && !DATA_REGEX.test(fim))) {
-    return res.status(400).json({ erro: 'Use o formato YYYY-MM-DD' });
-  }
+    if (!inicio && !fim) {
+      return res.status(400).json({ erro: 'Informe ao menos "inicio" ou "fim" (YYYY-MM-DD)' });
+    }
+    if ((inicio && !dataValida(inicio)) || (fim && !dataValida(fim))) {
+      return res.status(400).json({ erro: "Use o formato YYYY-MM-DD" });
+    }
 
-  const resultado = ler().filter((e) => {
-    const dia = e.created_at.slice(0, 10);
-    return (!inicio || dia >= inicio) && (!fim || dia <= fim);
-  });
-
-  if (resultado.length === 0) {
-    return res.status(404).json({ erro: 'Nenhuma empresa encontrada nesse período' });
+    const resultado = await Empresa.find(filtroPorIntervalo(inicio, fim));
+    if (resultado.length === 0) {
+      return res.status(404).json({ erro: "Nenhuma empresa encontrada nesse período" });
+    }
+    res.json(resultado);
+  } catch (err) {
+    erro(res, err);
   }
-  res.json(resultado);
 });
 
 // ---------- GET /empresas/data/:data ----------
@@ -196,19 +216,22 @@ router.get('/data', (req, res) => {
  *       404:
  *         description: Nenhuma empresa encontrada
  */
-router.get('/data/:data', (req, res) => {
-  const { data } = req.params;
+router.get("/data/:data", async (req, res) => {
+  try {
+    const { data } = req.params;
 
-  if (!DATA_REGEX.test(data)) {
-    return res.status(400).json({ erro: 'Use o formato YYYY-MM-DD' });
+    if (!dataValida(data)) {
+      return res.status(400).json({ erro: "Use o formato YYYY-MM-DD" });
+    }
+
+    const resultado = await Empresa.find(filtroPorIntervalo(data, data));
+    if (resultado.length === 0) {
+      return res.status(404).json({ erro: "Nenhuma empresa cadastrada nessa data" });
+    }
+    res.json(resultado);
+  } catch (err) {
+    erro(res, err);
   }
-
-  const resultado = ler().filter((e) => e.created_at.slice(0, 10) === data);
-
-  if (resultado.length === 0) {
-    return res.status(404).json({ erro: 'Nenhuma empresa cadastrada nessa data' });
-  }
-  res.json(resultado);
 });
 
 // ---------- GET /empresas/:id (SEMPRE depois das rotas com prefixo) ----------
@@ -222,7 +245,7 @@ router.get('/data/:data', (req, res) => {
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: string }
  *     responses:
  *       200:
  *         description: Empresa encontrada
@@ -232,10 +255,15 @@ router.get('/data/:data', (req, res) => {
  *       404:
  *         description: Empresa não encontrada
  */
-router.get('/:id', (req, res) => {
-  const empresa = ler().find((e) => e.id === Number(req.params.id));
-  if (!empresa) return res.status(404).json({ erro: 'Empresa não encontrada' });
-  res.json(empresa);
+router.get("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ erro: "Empresa não encontrada" });
+    const empresa = await Empresa.findById(req.params.id);
+    if (!empresa) return res.status(404).json({ erro: "Empresa não encontrada" });
+    res.json(empresa);
+  } catch (err) {
+    erro(res, err);
+  }
 });
 
 // ---------- POST /empresas ----------
@@ -261,32 +289,24 @@ router.get('/:id', (req, res) => {
  *       409:
  *         description: CNPJ já cadastrado
  */
-router.post('/', (req, res) => {
-  const { corporate_name, trade_name, cnpj, phone } = req.body;
+router.post("/", async (req, res) => {
+  try {
+    const { corporate_name, trade_name, cnpj, phone } = req.body;
 
-  if (!corporate_name || !trade_name || !cnpj) {
-    return res.status(400).json({
-      erro: 'Campos obrigatórios: corporate_name, trade_name, cnpj',
-    });
+    if (!corporate_name || !trade_name || !cnpj) {
+      return res.status(400).json({ erro: "Campos obrigatórios: corporate_name, trade_name, cnpj" });
+    }
+
+    const existentes = await Empresa.find();
+    if (existentes.some((e) => soDigitos(e.cnpj) === soDigitos(cnpj))) {
+      return res.status(409).json({ erro: "CNPJ já cadastrado" });
+    }
+
+    const nova = await Empresa.create({ corporate_name, trade_name, cnpj, phone: phone ?? null });
+    res.status(201).json(nova);
+  } catch (err) {
+    erro(res, err);
   }
-
-  const empresas = ler();
-  if (empresas.some((e) => soDigitos(e.cnpj) === soDigitos(cnpj))) {
-    return res.status(409).json({ erro: 'CNPJ já cadastrado' });
-  }
-
-  const nova = {
-    id: empresas.length ? Math.max(...empresas.map((e) => e.id)) + 1 : 1,
-    corporate_name,
-    trade_name,
-    cnpj,
-    phone: phone ?? null,
-    created_at: new Date().toISOString(),
-  };
-
-  empresas.push(nova);
-  salvar(empresas);
-  res.status(201).json(nova);
 });
 
 // ---------- PUT /empresas/:id ----------
@@ -300,7 +320,7 @@ router.post('/', (req, res) => {
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: string }
  *     requestBody:
  *       required: true
  *       content:
@@ -317,31 +337,32 @@ router.post('/', (req, res) => {
  *       409:
  *         description: CNPJ já em uso por outra empresa
  */
-router.put('/:id', (req, res) => {
-  const empresas = ler();
-  const indice = empresas.findIndex((e) => e.id === Number(req.params.id));
-  if (indice === -1) return res.status(404).json({ erro: 'Empresa não encontrada' });
+router.put("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ erro: "Empresa não encontrada" });
+    const empresa = await Empresa.findById(req.params.id);
+    if (!empresa) return res.status(404).json({ erro: "Empresa não encontrada" });
 
-  const { corporate_name, trade_name, cnpj, phone } = req.body;
+    const { corporate_name, trade_name, cnpj, phone } = req.body;
 
-  if (
-    cnpj &&
-    empresas.some((e, i) => i !== indice && soDigitos(e.cnpj) === soDigitos(cnpj))
-  ) {
-    return res.status(409).json({ erro: 'CNPJ já em uso por outra empresa' });
+    if (cnpj) {
+      const outras = await Empresa.find({ _id: { $ne: empresa._id } });
+      if (outras.some((e) => soDigitos(e.cnpj) === soDigitos(cnpj))) {
+        return res.status(409).json({ erro: "CNPJ já em uso por outra empresa" });
+      }
+    }
+
+    empresa.set({
+      corporate_name: corporate_name ?? empresa.corporate_name,
+      trade_name: trade_name ?? empresa.trade_name,
+      cnpj: cnpj ?? empresa.cnpj,
+      phone: phone !== undefined ? phone : empresa.phone,
+    });
+    await empresa.save();
+    res.json(empresa);
+  } catch (err) {
+    erro(res, err);
   }
-
-  const atual = empresas[indice];
-  empresas[indice] = {
-    ...atual, // id e created_at nunca mudam
-    corporate_name: corporate_name ?? atual.corporate_name,
-    trade_name: trade_name ?? atual.trade_name,
-    cnpj: cnpj ?? atual.cnpj,
-    phone: phone !== undefined ? phone : atual.phone,
-  };
-
-  salvar(empresas);
-  res.json(empresas[indice]);
 });
 
 // ---------- DELETE /empresas/:id ----------
@@ -355,21 +376,22 @@ router.put('/:id', (req, res) => {
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: string }
  *     responses:
  *       200:
  *         description: Empresa removida
  *       404:
  *         description: Empresa não encontrada
  */
-router.delete('/:id', (req, res) => {
-  const empresas = ler();
-  const indice = empresas.findIndex((e) => e.id === Number(req.params.id));
-  if (indice === -1) return res.status(404).json({ erro: 'Empresa não encontrada' });
-
-  const [removida] = empresas.splice(indice, 1);
-  salvar(empresas);
-  res.json({ mensagem: 'Empresa removida com sucesso', empresa: removida });
+router.delete("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ erro: "Empresa não encontrada" });
+    const removida = await Empresa.findByIdAndDelete(req.params.id);
+    if (!removida) return res.status(404).json({ erro: "Empresa não encontrada" });
+    res.json({ mensagem: "Empresa removida com sucesso", empresa: removida });
+  } catch (err) {
+    erro(res, err);
+  }
 });
 
 module.exports = router;

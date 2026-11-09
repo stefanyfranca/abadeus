@@ -1,18 +1,11 @@
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
+const Espaco = require("../models/Espaco");
+const { idValido, tratarErro } = require("../utils/http");
 
 const router = express.Router();
-const DB_PATH = path.join(__dirname, "..", "db", "espacos.json");
 const TYPES = ["COWORKING", "LAB", "MEETING_ROOM"];
 
-function readSpaces() {
-  return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-}
-
-function saveSpaces(spaces) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(spaces, null, 2), "utf-8");
-}
+const escapeRegex = (texto) => String(texto).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function validate(body) {
   const { name, type, capacity, description, is_active } = body;
@@ -46,9 +39,9 @@ function validate(body) {
  *         - capacity
  *       properties:
  *         id:
- *           type: integer
- *           description: ID do espaço (gerado automaticamente)
- *           example: 1
+ *           type: string
+ *           description: ID do espaço (gerado automaticamente pelo MongoDB)
+ *           example: "65f1c2a4e1b2c3d4e5f60718"
  *         name:
  *           type: string
  *           description: Nome do espaço
@@ -136,23 +129,23 @@ function validate(body) {
  *               items:
  *                 $ref: '#/components/schemas/Space'
  */
-router.get("/", (req, res) => {
-  const { name, type, is_active } = req.query;
-  let spaces = readSpaces();
+router.get("/", async (req, res) => {
+  try {
+    const { name, type, is_active } = req.query;
+    const filtro = {};
 
-  if (name) {
-    spaces = spaces.filter((s) =>
-      s.name.toLowerCase().includes(String(name).toLowerCase())
-    );
-  }
-  if (type) {
-    spaces = spaces.filter((s) => s.type === String(type).toUpperCase());
-  }
-  if (is_active !== undefined) {
-    spaces = spaces.filter((s) => String(s.is_active) === String(is_active));
-  }
+    if (name) filtro.name = { $regex: escapeRegex(name), $options: "i" };
+    if (type) filtro.type = String(type).toUpperCase();
+    if (is_active !== undefined) {
+      if (!["true", "false"].includes(String(is_active))) return res.status(200).json([]);
+      filtro.is_active = String(is_active) === "true";
+    }
 
-  res.status(200).json(spaces);
+    const spaces = await Espaco.find(filtro);
+    res.status(200).json(spaces);
+  } catch (err) {
+    tratarErro(res, err);
+  }
 });
 
 /**
@@ -166,9 +159,9 @@ router.get("/", (req, res) => {
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
+ *           type: string
  *         description: ID do espaço
- *         example: 1
+ *         example: "65f1c2a4e1b2c3d4e5f60718"
  *     responses:
  *       200:
  *         description: Espaço encontrado
@@ -183,12 +176,15 @@ router.get("/", (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get("/:id", (req, res) => {
-  const space = readSpaces().find((s) => s.id === Number(req.params.id));
-  if (!space) {
-    return res.status(404).json({ message: "Espaço não encontrado" });
+router.get("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ message: "Espaço não encontrado" });
+    const space = await Espaco.findById(req.params.id);
+    if (!space) return res.status(404).json({ message: "Espaço não encontrado" });
+    res.status(200).json(space);
+  } catch (err) {
+    tratarErro(res, err);
   }
-  res.status(200).json(space);
 });
 
 /**
@@ -217,27 +213,22 @@ router.get("/:id", (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post("/", (req, res) => {
-  const error = validate(req.body);
-  if (error) {
-    return res.status(400).json({ message: error });
+router.post("/", async (req, res) => {
+  try {
+    const error = validate(req.body);
+    if (error) return res.status(400).json({ message: error });
+
+    const newSpace = await Espaco.create({
+      name: req.body.name.trim(),
+      type: req.body.type,
+      capacity: req.body.capacity,
+      description: req.body.description ?? "",
+      is_active: req.body.is_active ?? true,
+    });
+    res.status(201).json(newSpace);
+  } catch (err) {
+    tratarErro(res, err);
   }
-
-  const spaces = readSpaces();
-  const nextId = spaces.length ? Math.max(...spaces.map((s) => s.id)) + 1 : 1;
-
-  const newSpace = {
-    id: nextId,
-    name: req.body.name.trim(),
-    type: req.body.type,
-    capacity: req.body.capacity,
-    description: req.body.description ?? "",
-    is_active: req.body.is_active ?? true,
-  };
-
-  spaces.push(newSpace);
-  saveSpaces(spaces);
-  res.status(201).json(newSpace);
 });
 
 /**
@@ -251,9 +242,9 @@ router.post("/", (req, res) => {
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
+ *           type: string
  *         description: ID do espaço
- *         example: 1
+ *         example: "65f1c2a4e1b2c3d4e5f60718"
  *     requestBody:
  *       required: true
  *       content:
@@ -280,29 +271,27 @@ router.post("/", (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put("/:id", (req, res) => {
-  const spaces = readSpaces();
-  const index = spaces.findIndex((s) => s.id === Number(req.params.id));
-  if (index === -1) {
-    return res.status(404).json({ message: "Espaço não encontrado" });
+router.put("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ message: "Espaço não encontrado" });
+    const space = await Espaco.findById(req.params.id);
+    if (!space) return res.status(404).json({ message: "Espaço não encontrado" });
+
+    const error = validate(req.body);
+    if (error) return res.status(400).json({ message: error });
+
+    space.set({
+      name: req.body.name.trim(),
+      type: req.body.type,
+      capacity: req.body.capacity,
+      description: req.body.description ?? space.description,
+      is_active: req.body.is_active ?? space.is_active,
+    });
+    await space.save();
+    res.status(200).json(space);
+  } catch (err) {
+    tratarErro(res, err);
   }
-
-  const error = validate(req.body);
-  if (error) {
-    return res.status(400).json({ message: error });
-  }
-
-  spaces[index] = {
-    id: spaces[index].id,
-    name: req.body.name.trim(),
-    type: req.body.type,
-    capacity: req.body.capacity,
-    description: req.body.description ?? spaces[index].description,
-    is_active: req.body.is_active ?? spaces[index].is_active,
-  };
-
-  saveSpaces(spaces);
-  res.status(200).json(spaces[index]);
 });
 
 /**
@@ -316,9 +305,9 @@ router.put("/:id", (req, res) => {
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
+ *           type: string
  *         description: ID do espaço
- *         example: 1
+ *         example: "65f1c2a4e1b2c3d4e5f60718"
  *     responses:
  *       200:
  *         description: Espaço removido com sucesso
@@ -337,16 +326,15 @@ router.put("/:id", (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.delete("/:id", (req, res) => {
-  const spaces = readSpaces();
-  const index = spaces.findIndex((s) => s.id === Number(req.params.id));
-  if (index === -1) {
-    return res.status(404).json({ message: "Espaço não encontrado" });
+router.delete("/:id", async (req, res) => {
+  try {
+    if (!idValido(req.params.id)) return res.status(404).json({ message: "Espaço não encontrado" });
+    const removido = await Espaco.findByIdAndDelete(req.params.id);
+    if (!removido) return res.status(404).json({ message: "Espaço não encontrado" });
+    res.status(200).json({ message: "Espaço removido com sucesso" });
+  } catch (err) {
+    tratarErro(res, err);
   }
-
-  spaces.splice(index, 1);
-  saveSpaces(spaces);
-  res.status(200).json({ message: "Espaço removido com sucesso" });
 });
 
 module.exports = router;
